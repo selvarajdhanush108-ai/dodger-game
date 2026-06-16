@@ -5,8 +5,28 @@ const restartBtn = document.getElementById("restartBtn");
 // Game variables
 let animationId;
 let score = 0;
-let highScore = localStorage.getItem("dodgerHighScore") || 0; // Load saved high score
+let highScore = localStorage.getItem("dodgerHighScore") || 0;
 let isGameOver = false;
+let isPaused = false; // New variable for YouTube's pause state
+
+// ==========================================
+// YOUTUBE PLAYABLES NATIVE HOOKS
+// ==========================================
+window.onPause = function() {
+    isPaused = true;
+};
+
+window.onResume = function() {
+    if (isPaused) {
+        isPaused = false;
+        gameLoop(); // Kickstart the loop again
+    }
+};
+
+window.onAudioEnabledChange = function(isEnabled) {
+    // If we had a soundtrack, we would mute/unmute it right here!
+};
+// ==========================================
 
 // Player Object
 const player = {
@@ -15,14 +35,13 @@ const player = {
     width: 50,
     height: 50,
     color: "#3498db",
-    speed: 6, // Made the player slightly faster for v2!
+    speed: 6,
     dx: 0
 };
 
-// Enemies Array
 let enemies = [];
 
-// Input handling
+// Keyboard Input
 document.addEventListener("keydown", (e) => {
     if (e.key === "ArrowLeft") player.dx = -player.speed;
     if (e.key === "ArrowRight") player.dx = player.speed;
@@ -32,7 +51,25 @@ document.addEventListener("keyup", (e) => {
     if (e.key === "ArrowLeft" || e.key === "ArrowRight") player.dx = 0;
 });
 
-// Create a new enemy
+// Mobile Touch Input (Mandatory for Playables)
+canvas.addEventListener("touchstart", (e) => {
+    e.preventDefault(); 
+    const touchX = e.touches[0].clientX;
+    const rect = canvas.getBoundingClientRect();
+    
+    // Move left if tapped on the left half, right if tapped on the right half
+    if (touchX < rect.left + rect.width / 2) {
+        player.dx = -player.speed;
+    } else {
+        player.dx = player.speed;
+    }
+}, {passive: false});
+
+canvas.addEventListener("touchend", (e) => {
+    e.preventDefault();
+    player.dx = 0;
+}, {passive: false});
+
 function spawnEnemy() {
     const size = Math.random() * 30 + 20; 
     const x = Math.random() * (canvas.width - size);
@@ -46,22 +83,17 @@ function spawnEnemy() {
     });
 }
 
-// Update game state
 function update() {
-    if (isGameOver) return;
+    if (isGameOver || isPaused) return;
 
-    // Move player
     player.x += player.dx;
     
-    // Wall collision for player
     if (player.x < 0) player.x = 0;
     if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
 
-    // Move enemies
     enemies.forEach((enemy, index) => {
         enemy.y += enemy.speed;
 
-        // Collision detection
         if (
             player.x < enemy.x + enemy.width &&
             player.x + player.width > enemy.x &&
@@ -69,52 +101,42 @@ function update() {
             player.y + player.height > enemy.y
         ) {
             isGameOver = true;
-            // Check and save High Score
             if (score > highScore) {
                 highScore = score;
                 localStorage.setItem("dodgerHighScore", highScore);
             }
         }
 
-        // Remove enemies that fall off screen and increase score
         if (enemy.y > canvas.height) {
             enemies.splice(index, 1);
             score++;
         }
     });
 
-    // Spawn new enemies
-    if (Math.random() < 0.04) { // Slightly increased spawn rate
+    if (Math.random() < 0.04) {
         spawnEnemy();
     }
 }
 
-// Draw graphics
 function draw() {
-    // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw player
     ctx.fillStyle = player.color;
     ctx.fillRect(player.x, player.y, player.width, player.height);
 
-    // Draw enemies
     enemies.forEach(enemy => {
         ctx.fillStyle = enemy.color;
         ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
     });
 
-    // Draw Current Score
     ctx.fillStyle = "#2c3e50";
     ctx.font = "bold 20px Arial";
     ctx.fillText(`Score: ${score}`, 10, 30);
 
-    // Draw High Score
     ctx.fillStyle = "#f39c12";
     ctx.font = "bold 16px Arial";
     ctx.fillText(`High Score: ${highScore}`, 10, 55);
 
-    // Game Over Text
     if (isGameOver) {
         ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -131,8 +153,9 @@ function draw() {
     }
 }
 
-// Main Game Loop
 function gameLoop() {
+    if (isPaused) return; // Completely halt the loop when YouTube pauses it
+    
     update();
     draw();
     if (!isGameOver) {
@@ -140,7 +163,6 @@ function gameLoop() {
     }
 }
 
-// Restart functionality
 restartBtn.addEventListener("click", () => {
     isGameOver = false;
     score = 0;
@@ -150,5 +172,4 @@ restartBtn.addEventListener("click", () => {
     gameLoop();
 });
 
-// Start the game
 gameLoop();
